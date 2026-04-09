@@ -1,14 +1,16 @@
-FROM oven/bun:1.2.19-alpine AS builder
+FROM node:lts-alpine AS builder
 WORKDIR /app
 
+RUN npm install -g bun
 COPY ./package.json ./bun.lock ./
 RUN bun install --frozen-lockfile
 
 COPY . .
 RUN bun run build
 
-FROM oven/bun:1.2.19-alpine AS runner
+FROM node:lts-alpine AS runner
 WORKDIR /app
+RUN npm install -g bun
 
 COPY ./package.json ./bun.lock ./
 RUN bun install --frozen-lockfile --production --ignore-scripts --no-cache

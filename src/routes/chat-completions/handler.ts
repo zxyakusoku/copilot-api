@@ -1,7 +1,6 @@
 import type { Context } from "hono"
 
 import consola from "consola"
-import { streamSSE, type SSEMessage } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
@@ -12,6 +11,7 @@ import {
   createChatCompletions,
   type ChatCompletionResponse,
   type ChatCompletionsPayload,
+  usesMaxCompletionTokens,
 } from "~/services/copilot/create-chat-completions"
 
 export async function handleCompletion(c: Context) {
@@ -40,11 +40,23 @@ export async function handleCompletion(c: Context) {
   if (state.manualApprove) await awaitApproval()
 
   if (isNullish(payload.max_tokens)) {
-    payload = {
-      ...payload,
-      max_tokens: selectedModel?.capabilities.limits.max_output_tokens,
-    }
-    consola.debug("Set max_tokens to:", JSON.stringify(payload.max_tokens))
+    const defaultMaxTokens =
+      selectedModel?.capabilities.limits.max_output_tokens
+    payload =
+      usesMaxCompletionTokens(payload.model) ?
+        {
+          ...payload,
+          max_completion_tokens: defaultMaxTokens,
+        }
+      : {
+          ...payload,
+          max_tokens: defaultMaxTokens,
+        }
+
+    consola.debug(
+      "Set output token limit to:",
+      JSON.stringify(defaultMaxTokens),
+    )
   }
 
   const response = await createChatCompletions(payload)
@@ -55,11 +67,12 @@ export async function handleCompletion(c: Context) {
   }
 
   consola.debug("Streaming response")
-  return streamSSE(c, async (stream) => {
-    for await (const chunk of response) {
-      consola.debug("Streaming chunk:", JSON.stringify(chunk))
-      await stream.writeSSE(chunk as SSEMessage)
-    }
+  return new Response(response, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
   })
 }
 

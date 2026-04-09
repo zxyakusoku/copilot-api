@@ -1,6 +1,7 @@
 import type { Context } from "hono"
 
 import consola from "consola"
+import { events } from "fetch-event-stream"
 import { streamSSE } from "hono/streaming"
 
 import { awaitApproval } from "~/lib/approval"
@@ -59,10 +60,17 @@ export async function handleCompletion(c: Context) {
       messageStartSent: false,
       contentBlockIndex: 0,
       contentBlockOpen: false,
+      currentContentBlockType: undefined,
       toolCalls: {},
     }
 
-    for await (const rawEvent of response) {
+    const eventStream = events(
+      new Response(response, {
+        headers: { "Content-Type": "text/event-stream" },
+      }),
+    )
+
+    for await (const rawEvent of eventStream) {
       consola.debug("Copilot raw stream event:", JSON.stringify(rawEvent))
       if (rawEvent.data === "[DONE]") {
         break
