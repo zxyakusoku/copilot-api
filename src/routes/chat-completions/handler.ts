@@ -4,6 +4,11 @@ import consola from "consola"
 
 import { awaitApproval } from "~/lib/approval"
 import { checkRateLimit } from "~/lib/rate-limit"
+import {
+  setRequestModel,
+  setResolvedModel,
+  setResponseModel,
+} from "~/lib/request-logger"
 import { state } from "~/lib/state"
 import { getTokenCount } from "~/lib/tokenizer"
 import { isNullish } from "~/lib/utils"
@@ -18,6 +23,8 @@ export async function handleCompletion(c: Context) {
   await checkRateLimit(state)
 
   let payload = await c.req.json<ChatCompletionsPayload>()
+  setRequestModel(c, payload.model)
+  setResolvedModel(c, payload.model)
   consola.debug("Request payload:", JSON.stringify(payload).slice(-400))
 
   // Find the selected model
@@ -62,6 +69,7 @@ export async function handleCompletion(c: Context) {
   const response = await createChatCompletions(payload)
 
   if (isNonStreaming(response)) {
+    setResponseModel(c, response.model)
     consola.debug("Non-streaming response:", JSON.stringify(response))
     return c.json(response)
   }
